@@ -41,7 +41,15 @@ cut -f1 db_info | comm -13 - pkgs > newpkgs
 # collect all pkgs that have been updated (in AUR!)
 aur vercmp --quiet < db_info | cat - newpkgs > pkgupdate
 
-sed 's/^\(.*\)$/\.\/aur-src\/\1/' pkgupdate > queue
+# we need to correctly order packages, with dependencies
+# first. XXX this is dirty... and breaks the above check...
+while read -r line; do
+    aur depends -n "$line" >> pkgord
+done < pkgupdate
+
+if [ -f pkgord ]; then
+    uniq pkgord | sed 's/^\(.*\)$/\.\/aur-src\/\1/' > queue
+fi
 
 popd
 
