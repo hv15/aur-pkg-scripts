@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+# this script will build AUR packeges previously fetched
+
+readonly PKGDIR="aur-src"
+readonly DB="viesspkg"
+
+tmp=$(mktemp -d)
+trap 'rm -rf $tmp' EXIT
+
+if [ ! -d "$PKGDIR" ]; then
+    echo "Must be run relative to $PKGDIR" >&2
+    exit 1
+fi
+
+# get all currently fetched aur pkgs
+find "$PKGDIR" -mindepth 1 -maxdepth 1 -type d -print | sort > "$tmp/pkgdirs"
+
+pushd "$tmp"
+
+# parse pkgdirs into pkgnames
+xargs -a pkgdirs -n1 -P1 -I{} basename {} > pkgs
+
+# retrieve path to local repo
+aur repo -d "$DB" --list --status-file=db > db_info
+
+{ IFS= read -r db_name
+  IFS= read -r db_root
+} < "$tmp/db"
+
+if [[ -w $db_root/$db_name.db ]]; then
+    echo "Using [$db_name] repository" >&2
+else
+    echo "Error: $db_root/$db_name.db: permission denied" >&2
+    exit 1
+fi
+
+# get new AUR pkgs that *are not* in the package repo
+cut -f1 db_info | comm -13 - pkgs > newpkgs
+
+# collect all pkgs that have been updated (in AUR!)
+aur vercmp --quiet < db_info | cat - newpkgs > pkgupdate
+
+sed 's/^\(.*\)$/\.\/aur-src\/\1/' pkgupdate > queue
+
+popd
+
+if [ -s "$tmp/queue" ]; then
+    echo "Building packages"
+    xargs -a "$tmp/queue" -n1 -P1 -I{} echo " - {}"
+    aur build -a "$tmp/queue" -c -d "$DB" -s
+else
+    echo "Nothing to build"
+fi
