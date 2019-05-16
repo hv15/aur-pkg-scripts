@@ -1,13 +1,28 @@
 #!/usr/bin/env bash
 
-# this script with patch the given pkg
+## This script uses the aurutils commands. It reads in packages names
+## in a file `PKGLIST` and resolved all AUR dependencies. It then
+## fetchs the repos of all packages (and dependencies), storing them
+## in `PKGDIR`. Finally, the script will look in `PATCHDIR` for any
+## patch files and applies these to the repo(s). Each call of this
+## script resets any existing repos. Additionally, if a packages has
+## been removed from `PKGLIST`, its repo is removed as well.
 
-readonly PKGLIST="$HOME/aur-pkgs-list"
-readonly PKGDIR="$HOME/aur-src"
-readonly PATCHDIR="$HOME/aur-src-patches"
+## More details about patching:
+##  All AUR repos are of the form `<reponame>/PKGBUILD`, if you want
+##  to patch `<reponame>/PKGBUILD`, you create in the `PATCHDIR` the same
+##  directory structure: `$PATCHDIR/<reponame>`, every file you want to
+##  should be of the form `<filename+extenstion>.patch`, e.g.
+##  `PKGBUILD.patch`. Patches are applied on each call of this script.
 
-if [ ! -f "$PKGLIST" ]; then
-	echo "Can't find pkg list, create ${CONF} first before running!" >&2
+readonly ROOTDIR="$HOME"
+
+readonly PKGLIST="$ROOTDIR/aur-pkgs-list"
+readonly PKGDIR="$ROOTDIR/aur-src"
+readonly PATCHDIR="$ROOTDIR/aur-src-patches"
+
+if [ ! -s "$PKGLIST" ]; then
+	echo "Can't find pkg list, create \`${PKGLIST##*/}\` first before running!" >&2
 	exit 1
 else
 	# make sure pkg source dir exists
@@ -29,12 +44,15 @@ else
 	# we want to always reset (so that patch apply cleanly)
 	find . -mindepth 1 -maxdepth 1 -type d -exec git -C {} reset -q --hard master \;
 	xargs -a "$tmp/pkglist" -n1 -P4 aur fetch -g
+    echo "Pruning defunted repos... "
+    find . -mindepth 1 -maxdepth 1 -type d \( $(printf -- "-path */%s -o " $(cat "$tmp/pkglist")) -false \) -prune -o -type d -printf "%P\n" > "$tmp/prune"
+    xargs -a "$tmp/prune" -n1 -P1 rm -rf
 	popd
 
-	echo "Checking for patchs... "
+	echo "Checking for patches... "
 	while read -r pkg; do
 		if [ -d "${PATCHDIR}/${pkg}" ]; then
-			echo "   found, patching $pkg"
+			echo "   found patch, patching $pkg"
 			find "${PATCHDIR}/${pkg}" -iname '*.patch' -exec patch -d "$PKGDIR/$pkg" -p1 -i {} \;
 		fi
 	done < "$PKGLIST"
