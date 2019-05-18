@@ -15,7 +15,8 @@
 
 readonly ROOTDIR="$HOME"
 
-readonly PKGDIR="$ROOTDIR/aur-src"
+readonly PKGDIR="aur-src"
+readonly PKGPATH="$ROOTDIR/$PKGDIR"
 readonly DB="viesspkg"
 
 parse_srcinfo() {
@@ -26,7 +27,7 @@ parse_srcinfo() {
     file="$1/.SRCINFO"
     pkgver="$(grep pkgver "$file" | cut -d' ' -f3)"
 
-    grep pkgname "$file" | cut -d' ' -f3 | sort | sed "s|\$| $pkgver|"
+    grep pkgname "$file" | cut -d' ' -f3 | sort | sed "s|\$|\t$pkgver|"
 }
 
 uniq_unsorted() {
@@ -41,13 +42,13 @@ if [ ! -d "$tmp" ]; then
 fi
 trap 'rm -rf $tmp' EXIT
 
-if [ ! -d "$PKGDIR" ]; then
-    echo "Must be run relative to $PKGDIR" >&2
+if [ ! -d "$PKGPATH" ]; then
+    echo "Must be run relative to $PKGPATH" >&2
     exit 1
 fi
 
 # get all currently fetched aur pkgs
-find "$PKGDIR" -mindepth 1 -maxdepth 1 -type d -printf "%P\n" | sort > "$tmp/pkgdirs"
+find "$PKGPATH" -mindepth 1 -maxdepth 1 -type d -printf "%P\n" | sort > "$tmp/pkgdirs"
 
 pushd "$tmp"
 
@@ -73,18 +74,20 @@ cut -f1 aurupdate > aurupdate.pkgname
 while read -r pkgdir; do
     echo "=> Checking pkgbase \`$pkgdir'"
     echo "==> Parsing .SRCINFO"
-    parse_srcinfo "$PKGDIR/$pkgdir" > "$pkgdir.depends"
+    parse_srcinfo "$PKGPATH/$pkgdir" > "$pkgdir.depends"
     cut -f1 "$pkgdir.depends" > "$pkgdir"
     echo "==> Checking if new or updated"
     cut -f1 db_info | comm -13 - "$pkgdir" > "$pkgdir.new"
-    comm -13 aurupdate.pkgname "$pkgdir" > "$pkgdir.update"
+    comm -12 aurupdate.pkgname "$pkgdir" > "$pkgdir.update"
 
     if [ -s "$pkgdir.new" ] || [ -s "$pkgdir.update" ]; then
         echo "==> Added \`$pkgdir' to build queue"
-        if ! aur depends -n "$pkgdir" 2> /dev/null >> pkgord; then
+        if ! aur depends -b "$pkgdir" 2> /dev/null >> pkgord; then
             # pkgdir is a group of pkgs
             echo "$pkgdir" >> pkgord
         fi
+    else
+        echo "==> Already latest, skipping..."
     fi
 done < pkgdirs
 
