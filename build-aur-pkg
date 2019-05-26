@@ -123,7 +123,7 @@ fi
 popd
 
 if [ -s "$tmp/queue" ]; then
-    xargs -a "$tmp/queue" -n1 -P1 -I{} msg "Building {}"
+    xargs -a "$tmp/queue" -n1 -P1 -I{} echo " -> Building {}"
     aur build -a "$tmp/queue" -c -d "$dbname" -s
 else
     msg "Nothing to build"

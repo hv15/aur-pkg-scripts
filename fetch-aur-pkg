@@ -22,6 +22,7 @@ patchdir="aur-src-patches"
 
 source /usr/share/makepkg/util/message.sh
 source /usr/share/makepkg/util/parseopts.sh
+source /usr/share/makepkg/util/util.sh
 
 ## Handle Options
 readonly OPT_SHORT='d:hl:p:'
@@ -46,6 +47,17 @@ while true; do
     esac
     shift
 done
+
+readonly pkgpath="$(canonicalize_path "$pkgdir")"
+if [ ! -d "$pkgpath" ]; then
+    error "AUR source directory \`$pkgpath' does not exist!"
+    exit 1
+fi
+readonly patchpath="$(canonicalize_path "$patchdir")"
+if [ ! -d "$patchpath" ]; then
+    error "Patch directory \`$patchpath' does not exist!"
+    exit 1
+fi
 
 if [ ! -s "$pkglist" ]; then
     error "Can't find pkg list, create \`${pkglist##*/}\` first before running!"
@@ -77,9 +89,9 @@ else
 
 	msg "Checking for patches... "
 	while read -r pkg; do
-		if [ -d "${patchdir}/${pkg}" ]; then
+		if [ -d "${patchpath}/${pkg}" ]; then
 			msg2 "found patch, patching $pkg"
-			find "${patchdir}/${pkg}" -iname '*.patch' -exec patch -d "$pkgdir/$pkg" -p1 -i {} \;
+			find "${patchpath}/${pkg}" -iname '*.patch' -exec patch -d "$pkgpath/$pkg" -p1 -i {} \;
 		fi
 	done < "$pkglist"
 fi
