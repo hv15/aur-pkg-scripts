@@ -15,45 +15,71 @@
 ##  should be of the form `<filename+extenstion>.patch`, e.g.
 ##  `PKGBUILD.patch`. Patches are applied on each call of this script.
 
-readonly ROOTDIR="$HOME"
+## Default options
+pkglist="aur-pkgs-list"
+pkgdir="aur-src"
+patchdir="aur-src-patches"
 
-readonly PKGLIST="$ROOTDIR/aur-pkgs-list"
-readonly PKGDIR="$ROOTDIR/aur-src"
-readonly PATCHDIR="$ROOTDIR/aur-src-patches"
+source /usr/share/makepkg/util/message.sh
+source /usr/share/makepkg/util/parseopts.sh
 
-if [ ! -s "$PKGLIST" ]; then
-	echo "Can't find pkg list, create \`${PKGLIST##*/}\` first before running!" >&2
+## Handle Options
+readonly OPT_SHORT='d:hl:p:'
+readonly OPT_LONG=('dir:' 'help' 'list:' 'pdir:')
+
+usage() {
+    plain "Usage: %s [--dir PKGDIR] [--list PKGLIST] [--pdir PATCHDIR] [--help]" "fetch-aur-pkg"
+}
+
+if ! parseopts "$OPT_SHORT" "${OPT_LONG[@]}" -- "$@"; then
+    exit 1
+fi
+set -- "${OPTRET[@]}"
+
+while true; do
+    case "$1" in
+        -d|--dir) shift; pkgdir="$1"; ;;
+        -h|--help) usage; exit 0; ;;
+        -l|--list) shift; pkglist="$1"; ;;
+        -p|--pdir) shift; patchdir="$1"; ;;
+        --) shift; break; ;;
+    esac
+    shift
+done
+
+if [ ! -s "$pkglist" ]; then
+    error "Can't find pkg list, create \`${pkglist##*/}\` first before running!"
 	exit 1
 else
 	# make sure pkg source dir exists
-	mkdir -p "$PKGDIR"
+	[ -d "$pkgdir" ] || mkdir -p "$pkgdir"
 
 	tmp=$(mktemp -d)
 	trap 'rm -rf $tmp' EXIT
 
-	echo -n "Determining AUR dependencies... "
+	msg "Determining AUR dependencies... "
 	while read -r pkg; do
 		aur depends -b "$pkg" >> "$tmp/depends"
-	done < "$PKGLIST"
-	echo "done"
+	done < "$pkglist"
 	
 	sort -u "$tmp/depends" > "$tmp/pkglist"
 
-	pushd "$PKGDIR"
-	echo "Fetching packages and their AUR dependencies... "
+	pushd "$pkgdir"
+	msg "Fetching packages and their AUR dependencies... "
 	# we want to always reset (so that patch apply cleanly)
 	find . -mindepth 1 -maxdepth 1 -type d -exec git -C {} reset -q --hard master \;
 	xargs -a "$tmp/pkglist" -n1 -P4 aur fetch -g
-    echo "Pruning defunted repos... "
+    msg "Pruning defunted repos... "
+    # shellcheck disable=SC2046
     find . -mindepth 1 -maxdepth 1 -type d \( $(printf -- "-path */%s -o " $(cat "$tmp/pkglist")) -false \) -prune -o -type d -printf "%P\n" > "$tmp/prune"
     xargs -a "$tmp/prune" -n1 -P1 rm -rf
 	popd
 
-	echo "Checking for patches... "
+	msg "Checking for patches... "
 	while read -r pkg; do
-		if [ -d "${PATCHDIR}/${pkg}" ]; then
-			echo "   found patch, patching $pkg"
-			find "${PATCHDIR}/${pkg}" -iname '*.patch' -exec patch -d "$PKGDIR/$pkg" -p1 -i {} \;
+		if [ -d "${patchdir}/${pkg}" ]; then
+			msg2 "found patch, patching $pkg"
+			find "${patchdir}/${pkg}" -iname '*.patch' -exec patch -d "$pkgdir/$pkg" -p1 -i {} \;
 		fi
-	done < "$PKGLIST"
+	done < "$pkglist"
 fi

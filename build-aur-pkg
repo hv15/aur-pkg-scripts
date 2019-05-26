@@ -13,16 +13,13 @@
 ## part of the package-base will be built - even if the user
 ## does not want this.
 
-readonly ROOTDIR="$HOME"
-
-readonly PKGDIR="aur-src"
-readonly PKGPATH="$ROOTDIR/$PKGDIR"
-readonly DB="viesspkg"
+## Default options
+pkgdir="aur-src"
+dbname="viesspkg"
 
 parse_srcinfo() {
     ## print out pkgnames with version info
-    local file
-    local pkgver
+    local file pkgver
 
     file="$1/.SRCINFO"
     pkgver="$(grep pkgver "$file" | cut -d' ' -f3)"
@@ -35,34 +32,62 @@ uniq_unsorted() {
     cat -n "$1" | sort -uk2 | sort -nk2 | cut -f2-
 }
 
+source /usr/share/makepkg/util/message.sh
+source /usr/share/makepkg/util/parseopts.sh
+source /usr/share/makepkg/util/util.sh
+
+## Handle Options
+readonly OPT_SHORT='d:hn:'
+readonly OPT_LONG=('dir:' 'help' 'name:')
+
+usage() {
+    plain "Usage: %s [--dir PKGDIR] [--name DBNAME] [--help]" "build-aur-pkg"
+}
+
+if ! parseopts "$OPT_SHORT" "${OPT_LONG[@]}" -- "$@"; then
+    exit 1
+fi
+set -- "${OPTRET[@]}"
+
+while true; do
+    case "$1" in
+        -d|--dir) shift; pkgdir="$1"; ;;
+        -h|--help) usage; exit 0; ;;
+        -n|--name) shift; dbname="$1"; ;;
+        --) shift; break; ;;
+    esac
+    shift
+done
+
 tmp="$(mktemp -d)"
 if [ ! -d "$tmp" ]; then
-    echo "Unable to create temp directory!" >&2
+    error "Unable to create temp directory!"
     exit 2
 fi
 trap 'rm -rf $tmp' EXIT
 
-if [ ! -d "$PKGPATH" ]; then
-    echo "Must be run relative to $PKGPATH" >&2
+readonly pkgpath="$(canonicalize_path "$pkgdir")"
+if [ ! -d "$pkgpath" ]; then
+    error "\`$pkgpath' does not exist!"
     exit 1
 fi
 
 # get all currently fetched aur pkgs
-find "$PKGPATH" -mindepth 1 -maxdepth 1 -type d -printf "%P\n" | sort > "$tmp/pkgdirs"
+find "$pkgpath" -mindepth 1 -maxdepth 1 -type d -printf "%P\n" | sort > "$tmp/pkgdirs"
 
 pushd "$tmp"
 
 # retrieve path to local repo
-aur repo -S -d "$DB" --list --status-file=db | sort > db_info
+aur repo -S -d "$dbname" --list --status-file=db | sort > db_info
 
 { IFS= read -r db_name
   IFS= read -r db_root
 } < "$tmp/db"
 
 if [[ -w $db_root/$db_name.db ]]; then
-    echo "Using [$db_name] repository" >&2
+    msg "Using [$db_name] repository"
 else
-    echo "Error: $db_root/$db_name.db: permission denied" >&2
+    error "$db_root/$db_name.db: permission denied"
     exit 1
 fi
 
@@ -71,35 +96,35 @@ aur vercmp --quiet < db_info > aurupdate
 cut -f1 aurupdate > aurupdate.pkgname
 
 # parse srcinfo (for pkgnames)
-while read -r pkgdir; do
-    echo "=> Checking pkgbase \`$pkgdir'"
-    echo "==> Parsing .SRCINFO"
-    parse_srcinfo "$PKGPATH/$pkgdir" > "$pkgdir.depends"
-    cut -f1 "$pkgdir.depends" > "$pkgdir"
-    echo "==> Checking if new or updated"
-    cut -f1 db_info | comm -13 - "$pkgdir" > "$pkgdir.new"
-    comm -12 aurupdate.pkgname "$pkgdir" > "$pkgdir.update"
+while read -r pkg; do
+    msg "Checking pkgbase \`$pkg'"
+    msg2 "Parsing .SRCINFO"
+    parse_srcinfo "$pkgpath/$pkg" > "$pkg.depends"
+    cut -f1 "$pkg.depends" > "$pkg"
+    msg2 "Checking if new or updated"
+    cut -f1 db_info | comm -13 - "$pkg" > "$pkg.new"
+    comm -12 aurupdate.pkgname "$pkg" > "$pkg.update"
 
-    if [ -s "$pkgdir.new" ] || [ -s "$pkgdir.update" ]; then
-        echo "==> Added \`$pkgdir' to build queue"
-        if ! aur depends -b "$pkgdir" 2> /dev/null >> pkgord; then
+    if [ -s "$pkg.new" ] || [ -s "$pkg.update" ]; then
+        msg2 "Added \`$pkg' to build queue"
+        if ! aur depends -b "$pkg" 2> /dev/null >> pkgord; then
             # pkgdir is a group of pkgs
-            echo "$pkgdir" >> pkgord
+            echo "$pkg" >> pkgord
         fi
     else
-        echo "==> Already latest, skipping..."
+        msg2 "Already latest, skipping..."
     fi
 done < pkgdirs
 
 if [ -s pkgord ]; then
-    uniq_unsorted pkgord | sed "s|^\(.*\)$|$PKGDIR\/\1|" > queue
+    uniq_unsorted pkgord | sed "s|^\(.*\)$|$pkgdir\/\1|" > queue
 fi
 
 popd
 
 if [ -s "$tmp/queue" ]; then
-    xargs -a "$tmp/queue" -n1 -P1 -I{} echo "=> Building {}"
-    aur build -a "$tmp/queue" -c -d "$DB" -s
+    xargs -a "$tmp/queue" -n1 -P1 -I{} msg "Building {}"
+    aur build -a "$tmp/queue" -c -d "$dbname" -s
 else
-    echo "Nothing to build"
+    msg "Nothing to build"
 fi

@@ -35,6 +35,8 @@ Todo
 Setup
 -----
 
+These scripts depend on `makepkg` and `aurutils`.
+
 It is a good idea to have a dedicated build user with limited superuser rights (via sudo). Here we
 refer to the user as `{BUILDUSER}`.
 
