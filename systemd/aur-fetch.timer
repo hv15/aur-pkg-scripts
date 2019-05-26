@@ -1,0 +1,8 @@
+[Unit]
+Description=Run AUR fetch every three days
+
+[Timer]
+OnUnitActiveSec=3d
+
+[Install]
+WantedBy=timers.target
