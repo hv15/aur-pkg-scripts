@@ -1,6 +1,6 @@
 # Maintainer: Hans-Nikolai Viessmann <hans AT viess DOT mn>
 pkgname=aur-pkg-scripts-git
-pkgver=1.0.0.r0.gd4dce8b
+pkgver=1.0.1.r0.gbb3e7d5
 pkgrel=1
 pkgdesc='Scripts to automate updating/building of AUR packages'
 arch=('any')

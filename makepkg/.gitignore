@@ -1,0 +1,5 @@
+src/
+pkg/
+aur-pkg-scripts/
+*.tar.xz
+*.tar.xz.sig

@@ -4,5 +4,5 @@ Description=Fetch AUR packages
 [Service]
 Type=simple
 User=buildbot
-ExecStart=/usr/bin/fetch-aur-pkgs --dir "%h/aur-src" --list "%h/aur-pkgs-list" --pdir "%h/aur-src-patches"
+ExecStart=/usr/bin/fetch-aur-pkg --dir "%h/aur-src" --list "%h/aur-pkgs-list" --pdir "%h/aur-src-patches"
 Restart=no
