@@ -1,6 +1,6 @@
 # Maintainer: Hans-Nikolai Viessmann <hans AT viess DOT mn>
 pkgname=aur-pkg-scripts-git
-pkgver=1.0.0
+pkgver=1.0.0.r0.gd4dce8b
 pkgrel=1
 pkgdesc='Scripts to automate updating/building of AUR packages'
 arch=('any')
@@ -9,7 +9,10 @@ license=('custom:unlicense')
 depends=('aurutils')
 makedepends=('git')
 provides=("aur-pkg-scripts=${pkgver%%.r*}")
+replaces=("aur-pkg-scripts=${pkgver%%.r*}")
 #backup=('')
+source=('git+https://github.com/hv15/aur-pkg-scripts')
+sha256sums=('SKIP')
 
 pkgver() {
     cd aur-pkg-scripts
